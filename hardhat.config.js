@@ -1,5 +1,6 @@
 require ( "dotenv/config" )
 //require("hardhat-deploy");
+require("@nomicfoundation/hardhat-verify");
 const { task } = require("hardhat/config");
 
 require("@nomiclabs/hardhat-waffle");
@@ -22,7 +23,9 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 
 function accounts(){
   privatekey = process.env.PrivateKey
-  return [privatekey]
+  return privatekey?[privatekey]:{
+    mnemonic: 'test test test test test test test test test test test junk',
+  }
 }
 
 /**
@@ -67,7 +70,19 @@ module.exports = {
     
 
   },
-
+  etherscan: {
+    apiKey:{testnet:"NA"},
+    customChains: [
+      {
+        network: "testnet",
+        chainId: 123666,
+        urls: {
+          apiURL: "https://scan.devnet.onenesslabs.io/api",
+          browserURL: "https://scan.devnet.onenesslabs.io/",
+        }
+      }
+    ]
+  },
   blockscoutVerify: {
     blockscoutURL: "https://scan.devnet.onenesslabs.io/",
     contracts: {

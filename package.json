@@ -10,9 +10,10 @@
   "author": "onenessLabs",
   "devDependencies": {
     "@ericxstone/hardhat-blockscout-verify": "^1.0.0",
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.5",
     "@nomiclabs/hardhat-ethers": "^2.0.3",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
-    "@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
     "@openzeppelin/contracts": "npm:@openzeppelin/contracts@^4.2.0",
     "@openzeppelin/contracts-4": "npm:@openzeppelin/contracts@^4.0.0",
     "@openzeppelin/contracts-upgradeable": "^4.5.2",
