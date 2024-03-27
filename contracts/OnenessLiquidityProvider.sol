@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IPancakePair} from "./interfaces/IPancakePair.sol";
 import {IPancakeRouter02} from "./interfaces/IPancakeRouter02.sol";
@@ -18,6 +19,8 @@ contract OnenessStorage{
     IPancakeRouter02 public pancakeRouter;
 
     uint256 public constant MINIMUM_AMOUNT = 1000;
+
+    mapping(address => uint256) public userBalance;
     
 
 }
@@ -48,24 +51,19 @@ contract OnenessLiquidityProvider is OwnableUpgradeable,OnenessStorage {
      */
     function _calculateAmountToSwap(
         uint256 _token0AmountIn,
-        uint256 _reserve0,
-        uint256 _reserve1
+        uint256 _reserve0
     ) private view returns (uint256 amountToSwap) {
-        uint256 halfToken0Amount = _token0AmountIn / 2;
-        uint256 nominator = pancakeRouter.getAmountOut(halfToken0Amount, _reserve0, _reserve1);
-        uint256 denominator = pancakeRouter.quote(
-            halfToken0Amount,
-            _reserve0 + halfToken0Amount,
-            _reserve1 - nominator
-        );
-        console.log("halfToken0Amount",halfToken0Amount);
-        // Adjustment for price impact
         amountToSwap =
-            _token0AmountIn -
-            Babylonian.sqrt((halfToken0Amount * halfToken0Amount * nominator) / denominator);
+            Math.sqrt(_reserve0*(_reserve0 + _token0AmountIn)) - _reserve0;
         console.log("amountToSwap",amountToSwap);
         return amountToSwap;
     }
+
+
+    
+
+   
+
 
     function addLiquidity( uint256 _usdcAmountIn) external returns (uint256 lpTokenReceived){
         
@@ -78,6 +76,11 @@ contract OnenessLiquidityProvider is OwnableUpgradeable,OnenessStorage {
 
         // Initiates an estimation to swap
         uint256 swapAmountIn;
+        
+        uint256 userTotalAmountIn = _usdcAmountIn + userBalance[msg.sender];
+
+        console.log("user balance:",userBalance[msg.sender]," _amountIn:",_usdcAmountIn);
+        console.log("total:",userTotalAmountIn);
 
         {
             // Convert to uint256 (from uint112)
@@ -86,10 +89,10 @@ contract OnenessLiquidityProvider is OwnableUpgradeable,OnenessStorage {
             require((reserveA >= MINIMUM_AMOUNT) && (reserveB >= MINIMUM_AMOUNT), "Reserves too low");
 
             if (token0 == usdcAddress) {
-                swapAmountIn = _calculateAmountToSwap(_usdcAmountIn, reserveA, reserveB);
+                swapAmountIn = _calculateAmountToSwap(userTotalAmountIn, reserveA);
                 path[1] = token1;
             } else {
-                swapAmountIn = _calculateAmountToSwap(_usdcAmountIn, reserveB, reserveA);
+                swapAmountIn = _calculateAmountToSwap(userTotalAmountIn, reserveB);
                 path[1] = token0;
             }
         }
@@ -98,10 +101,10 @@ contract OnenessLiquidityProvider is OwnableUpgradeable,OnenessStorage {
         IERC20(usdcAddress).transferFrom(address(msg.sender), address(this), _usdcAmountIn);
         console.log("transfrom usdc to",address(this)," usdcAmountIn:",_usdcAmountIn);
          // Approve token to zap if necessary
-        uint256 _tokenAmountOutMin = 0;
+        
         uint256[] memory swapedAmounts = pancakeRouter.swapExactTokensForTokens(
             swapAmountIn,
-            _tokenAmountOutMin,
+            1,
             path,
             address(this),
             block.timestamp
@@ -115,10 +118,10 @@ contract OnenessLiquidityProvider is OwnableUpgradeable,OnenessStorage {
         }
 
         // Add liquidity and retrieve the amount of LP received by the sender
-        (, ,lpTokenReceived) = pancakeRouter.addLiquidity(
+        (uint256 amountA, uint256 amountB,uint256 lpTokenReceived ) = pancakeRouter.addLiquidity(
             path[0],
             path[1],
-            _usdcAmountIn - swapedAmounts[0],
+            userTotalAmountIn - swapedAmounts[0],
             swapedAmounts[1],
             1,
             1,
@@ -129,12 +132,17 @@ contract OnenessLiquidityProvider is OwnableUpgradeable,OnenessStorage {
         console.log("addLiquidity usdc:",(_usdcAmountIn - swapedAmounts[0])," token:",swapedAmounts[1]);
         console.log("lpReceived:",lpTokenReceived);
 
+        uint256 remainUsdc = (userTotalAmountIn - swapedAmounts[0] - amountA);
+        if(remainUsdc >0){
+            userBalance[msg.sender] = remainUsdc;
+        }
+        
         emit AddLiquidity(lpTokenReceived);
         return lpTokenReceived;
 
     }
 
-
+   
     /*
      * @notice Allows to zap a token in (e.g. token/other token)
      * @param _token: token address
